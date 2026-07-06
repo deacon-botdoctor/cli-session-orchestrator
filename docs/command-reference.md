@@ -93,3 +93,50 @@ python3 scripts/session_orchestrator.py summary --state .orchestrator/state.json
 ```
 
 Use this for an operator-facing topic digest.
+
+## Digest
+
+```bash
+python3 scripts/session_orchestrator.py digest --state .orchestrator/state.json
+```
+
+Use this when posting a fuller active-session summary to an operator topic.
+
+## Validate ledger
+
+```bash
+python3 scripts/session_orchestrator.py validate --state .orchestrator/state.json
+```
+
+Validation checks:
+
+- state version
+- required session fields
+- duplicate session IDs
+- valid status and risk values
+- timestamp parseability
+- proof on verified or closed sessions
+
+## Archive closed sessions
+
+```bash
+python3 scripts/session_orchestrator.py archive-closed --state .orchestrator/state.json --days 14
+```
+
+This marks old closed sessions as `archived`. It does not delete ledger history.
+
+## Check config shape
+
+```bash
+python3 scripts/session_orchestrator.py config-check --config config/orchestrator.example.yaml
+```
+
+The public reference check verifies the expected top-level sections. A private deployment can replace this with full schema validation.
+
+## Test
+
+```bash
+tests/smoke.sh
+```
+
+The smoke test covers init, create, update, topic update, digest, stale, validate, close, and config check.

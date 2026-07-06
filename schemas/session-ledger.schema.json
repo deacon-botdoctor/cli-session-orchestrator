@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CLI Session Orchestrator Ledger",
+  "type": "object",
+  "required": ["version", "sessions"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "task",
+          "topic",
+          "owner",
+          "status",
+          "created_at",
+          "updated_at",
+          "target",
+          "risk",
+          "resume",
+          "proof",
+          "handoff"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "task": { "type": "string" },
+          "topic": { "type": "string" },
+          "owner": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["triaged", "assigned", "active", "blocked", "needs_review", "verified", "closed", "archived"]
+          },
+          "created_at": { "type": "string" },
+          "updated_at": { "type": "string" },
+          "target": { "type": "string" },
+          "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+          "worker": { "type": "string" },
+          "resume": { "type": "string" },
+          "proof": { "type": "array", "items": { "type": "string" } },
+          "handoff": { "type": "string" },
+          "public_safe": { "type": "boolean" },
+          "notes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

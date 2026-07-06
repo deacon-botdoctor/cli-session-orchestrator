@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CLI Session Orchestrator Config",
+  "type": "object",
+  "required": ["version", "ledger", "topics", "workers", "safety"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "ledger": {
+      "type": "object",
+      "required": ["path", "stale_after_minutes"],
+      "properties": {
+        "path": { "type": "string" },
+        "stale_after_minutes": { "type": "integer" },
+        "archive_closed_after_days": { "type": "integer" }
+      }
+    },
+    "topics": { "type": "object" },
+    "workers": { "type": "object" },
+    "safety": { "type": "object" }
+  }
+}

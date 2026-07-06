@@ -40,6 +40,10 @@ flowchart TD
 - `docs/worker-dispatch.md`: when to answer directly, resume, spawn, or delegate.
 - `docs/escalation-matrix.md`: approval gates and high-risk boundaries.
 - `docs/command-reference.md`: CLI commands and examples.
+- `docs/private-binding-guide.md`: how to bind logical topics to private Telegram/runtime config.
+- `docs/observability.md`: status, stale-session, and digest signals.
+- `runbooks/`: stale-session, blocked-worker, and topic-misroute procedures.
+- `schemas/`: JSON schemas for ledgers and config.
 - `docs/handoff-protocol.md`: worker handoff and closeout packets.
 - `docs/verification-and-safety.md`: gates before commit, push, deploy, or public output.
 - `checklists/orchestrator-readiness.md`: install and runtime checklist.
@@ -56,6 +60,10 @@ python3 scripts/session_orchestrator.py update --state .orchestrator/state.json 
 python3 scripts/session_orchestrator.py close --state .orchestrator/state.json --session <id> --verdict verified --proof "pytest passed"
 python3 scripts/session_orchestrator.py topic-update --state .orchestrator/state.json --session <id> --kind progress
 python3 scripts/session_orchestrator.py stale --state .orchestrator/state.json --minutes 60
+python3 scripts/session_orchestrator.py validate --state .orchestrator/state.json
+python3 scripts/session_orchestrator.py digest --state .orchestrator/state.json
+python3 scripts/session_orchestrator.py config-check --config config/orchestrator.example.yaml
+tests/smoke.sh
 ```
 
 ## Minimum viable install

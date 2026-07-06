@@ -5,9 +5,27 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+STATUSES = {"triaged", "assigned", "active", "blocked", "needs_review", "verified", "closed", "archived"}
+RISKS = {"low", "medium", "high"}
+REQUIRED_FIELDS = {
+    "id",
+    "task",
+    "topic",
+    "owner",
+    "status",
+    "created_at",
+    "updated_at",
+    "target",
+    "risk",
+    "resume",
+    "proof",
+    "handoff",
+}
 
 
 def now() -> str:
@@ -29,6 +47,47 @@ def load_state(path: Path) -> dict[str, Any]:
 def save_state(path: Path, state: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+
+
+def validate_state(state: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if state.get("version") != 1:
+        errors.append("state.version must be 1")
+    sessions = state.get("sessions")
+    if not isinstance(sessions, list):
+        return errors + ["state.sessions must be a list"]
+    seen: set[str] = set()
+    for index, session in enumerate(sessions):
+        prefix = f"sessions[{index}]"
+        if not isinstance(session, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        missing = sorted(REQUIRED_FIELDS - set(session))
+        if missing:
+            errors.append(f"{prefix} missing fields: {', '.join(missing)}")
+        sid = session.get("id")
+        if not sid:
+            errors.append(f"{prefix}.id is required")
+        elif sid in seen:
+            errors.append(f"{prefix}.id duplicates {sid}")
+        else:
+            seen.add(sid)
+        if session.get("status") not in STATUSES:
+            errors.append(f"{prefix}.status invalid: {session.get('status')}")
+        if session.get("risk") not in RISKS:
+            errors.append(f"{prefix}.risk invalid: {session.get('risk')}")
+        for field in ("created_at", "updated_at"):
+            try:
+                parse_time(str(session.get(field)))
+            except Exception:
+                errors.append(f"{prefix}.{field} is not an ISO timestamp")
+        if not isinstance(session.get("proof", []), list):
+            errors.append(f"{prefix}.proof must be a list")
+        if not isinstance(session.get("notes", []), list):
+            errors.append(f"{prefix}.notes must be a list")
+        if session.get("status") in {"verified", "closed"} and not session.get("proof"):
+            errors.append(f"{prefix} is {session.get('status')} without proof")
+    return errors
 
 
 def session_id(topic: str) -> str:
@@ -219,6 +278,61 @@ def cmd_summary(args: argparse.Namespace) -> None:
             print(f"- {session['id']} [{session['status']}] {session['topic']}: {session['task']}")
 
 
+def cmd_validate(args: argparse.Namespace) -> None:
+    errors = validate_state(load_state(Path(args.state)))
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}")
+        raise SystemExit(1)
+    print("ledger_valid=true")
+
+
+def cmd_digest(args: argparse.Namespace) -> None:
+    state = load_state(Path(args.state))
+    print("Session digest:")
+    active = [s for s in state["sessions"] if s["status"] not in {"closed", "archived"}]
+    if not active:
+        print("- no active sessions")
+        return
+    for session in active:
+        proof = "; ".join(session.get("proof", [])) or "no proof yet"
+        print(f"- {session['id']} [{session['status']}] {session['topic']}: {session['task']}")
+        print(f"  - Owner: {session['owner']}")
+        print(f"  - Risk: {session['risk']}")
+        print(f"  - Updated: {session['updated_at']}")
+        print(f"  - Proof: {proof}")
+        if session.get("handoff"):
+            print(f"  - Next: {session['handoff']}")
+
+
+def cmd_archive_closed(args: argparse.Namespace) -> None:
+    path = Path(args.state)
+    state = load_state(path)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=args.days)
+    archived = 0
+    for session in state["sessions"]:
+        if session["status"] != "closed":
+            continue
+        if parse_time(session["updated_at"]) <= cutoff:
+            session["status"] = "archived"
+            session["updated_at"] = now()
+            archived += 1
+    save_state(path, state)
+    print(f"archived={archived}")
+
+
+def cmd_config_check(args: argparse.Namespace) -> None:
+    path = Path(args.config)
+    text = path.read_text()
+    required_terms = ["version:", "ledger:", "topics:", "workers:", "safety:"]
+    missing = [term for term in required_terms if term not in text]
+    if missing:
+        for term in missing:
+            print(f"ERROR: missing {term}")
+        raise SystemExit(1)
+    print("config_shape_valid=true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage a public-safe CLI session ledger.")
     sub = parser.add_subparsers(required=True)
@@ -281,12 +395,35 @@ def build_parser() -> argparse.ArgumentParser:
     summary = sub.add_parser("summary")
     summary.add_argument("--state", required=True)
     summary.set_defaults(func=cmd_summary)
+
+    validate = sub.add_parser("validate")
+    validate.add_argument("--state", required=True)
+    validate.set_defaults(func=cmd_validate)
+
+    digest = sub.add_parser("digest")
+    digest.add_argument("--state", required=True)
+    digest.set_defaults(func=cmd_digest)
+
+    archive = sub.add_parser("archive-closed")
+    archive.add_argument("--state", required=True)
+    archive.add_argument("--days", type=int, default=14)
+    archive.set_defaults(func=cmd_archive_closed)
+
+    config_check = sub.add_parser("config-check")
+    config_check.add_argument("--config", required=True)
+    config_check.set_defaults(func=cmd_config_check)
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except BrokenPipeError:
+        try:
+            sys.stdout.close()
+        finally:
+            raise SystemExit(0)
 
 
 if __name__ == "__main__":
