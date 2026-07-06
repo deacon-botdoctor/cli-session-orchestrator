@@ -14,6 +14,12 @@ def now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def parse_time(value: str) -> datetime:
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    return datetime.fromisoformat(value)
+
+
 def load_state(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"version": 1, "sessions": []}
@@ -117,6 +123,102 @@ def cmd_close(args: argparse.Namespace) -> None:
     print(f"closed {args.session}")
 
 
+def format_topic_update(session: dict[str, Any], kind: str) -> str:
+    if kind == "triage":
+        return "\n".join(
+            [
+                "Triage:",
+                f"- Request: {session['task']}",
+                f"- Topic lane: {session['topic']}",
+                f"- Owner: {session['owner']}",
+                f"- Scope: {session.get('target') or 'not specified'}",
+                f"- Risk: {session['risk']}",
+                f"- Next action: {session.get('handoff') or 'assign owner and define proof'}",
+            ]
+        )
+    if kind == "started":
+        return "\n".join(
+            [
+                "Started:",
+                f"- Session: {session['id']}",
+                f"- Worker: {session.get('worker') or session['owner']}",
+                f"- Target: {session.get('target') or 'not specified'}",
+                f"- Plan: {session.get('handoff') or 'work from assignment packet'}",
+                "- Expected proof: validator, source check, or explicit not-verified note",
+            ]
+        )
+    if kind == "blocked":
+        return "\n".join(
+            [
+                "Blocked:",
+                f"- What is blocked: {session.get('handoff') or session['task']}",
+                "- Source checked: see ledger notes",
+                "- Needed from human: approval, access, or scope decision",
+                "- Safe fallback: keep session open without mutation",
+            ]
+        )
+    if kind == "closeout":
+        proof = "; ".join(session.get("proof", [])) or "not verified"
+        return "\n".join(
+            [
+                "Closeout:",
+                f"- Result: {session.get('verdict') or session['status']}",
+                f"- Verified: {proof}",
+                "- Remaining risk: see ledger handoff",
+                "- Next action: none unless follow-up is assigned",
+                f"- Resume pointer: {session.get('resume') or 'not needed'}",
+            ]
+        )
+    return "\n".join(
+        [
+            "Progress:",
+            f"- Status: {session['status']}",
+            f"- Evidence: {'; '.join(session.get('proof', [])) or 'not yet attached'}",
+            f"- Next: {session.get('handoff') or 'continue current assignment'}",
+            "- Blocker: none recorded" if session["status"] != "blocked" else f"- Blocker: {session.get('handoff') or 'blocked'}",
+        ]
+    )
+
+
+def cmd_topic_update(args: argparse.Namespace) -> None:
+    state = load_state(Path(args.state))
+    session = find_session(state, args.session)
+    print(format_topic_update(session, args.kind))
+
+
+def cmd_stale(args: argparse.Namespace) -> None:
+    state = load_state(Path(args.state))
+    threshold_seconds = args.minutes * 60
+    current = datetime.now(timezone.utc)
+    found = False
+    for session in state["sessions"]:
+        if session["status"] in {"closed", "archived"} and not args.include_closed:
+            continue
+        updated = parse_time(session["updated_at"])
+        age_seconds = (current - updated).total_seconds()
+        if age_seconds >= threshold_seconds:
+            found = True
+            age_minutes = int(age_seconds // 60)
+            print(f"{session['id']}\t{session['status']}\t{age_minutes}m\t{session['topic']}\t{session['task']}")
+    if not found:
+        print("no stale sessions")
+
+
+def cmd_summary(args: argparse.Namespace) -> None:
+    state = load_state(Path(args.state))
+    counts: dict[str, int] = {}
+    for session in state["sessions"]:
+        counts[session["status"]] = counts.get(session["status"], 0) + 1
+    print("Session summary:")
+    for status in sorted(counts):
+        print(f"- {status}: {counts[status]}")
+    active = [s for s in state["sessions"] if s["status"] not in {"closed", "archived"}]
+    if active:
+        print("\nActive:")
+        for session in active:
+            print(f"- {session['id']} [{session['status']}] {session['topic']}: {session['task']}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage a public-safe CLI session ledger.")
     sub = parser.add_subparsers(required=True)
@@ -163,6 +265,22 @@ def build_parser() -> argparse.ArgumentParser:
     close.add_argument("--verdict", choices=["verified", "closed", "abandoned"], default="verified")
     close.add_argument("--proof")
     close.set_defaults(func=cmd_close)
+
+    topic_update = sub.add_parser("topic-update")
+    topic_update.add_argument("--state", required=True)
+    topic_update.add_argument("--session", required=True)
+    topic_update.add_argument("--kind", choices=["triage", "started", "progress", "blocked", "closeout"], default="progress")
+    topic_update.set_defaults(func=cmd_topic_update)
+
+    stale = sub.add_parser("stale")
+    stale.add_argument("--state", required=True)
+    stale.add_argument("--minutes", type=int, default=60)
+    stale.add_argument("--include-closed", action="store_true")
+    stale.set_defaults(func=cmd_stale)
+
+    summary = sub.add_parser("summary")
+    summary.add_argument("--state", required=True)
+    summary.set_defaults(func=cmd_summary)
     return parser
 
 

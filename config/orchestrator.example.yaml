@@ -1,0 +1,65 @@
+version: 1
+
+ledger:
+  path: ".orchestrator/state.json"
+  stale_after_minutes: 60
+  archive_closed_after_days: 14
+
+topics:
+  ops:
+    purpose: "operations coordination"
+    update_cadence_minutes: 30
+    approvals_required:
+      - destructive_operations
+      - credential_changes
+      - recurrence_enablement
+
+  engineering:
+    purpose: "code, repos, tests, PR coordination"
+    update_cadence_minutes: 45
+    approvals_required:
+      - push
+      - deploy
+      - public_repo_change
+
+  approvals:
+    purpose: "human approvals for high-risk actions"
+    update_cadence_minutes: 0
+
+workers:
+  direct:
+    use_when: "simple source-grounded answers"
+    required_proof: "source checked"
+
+  coding:
+    use_when: "repo edits or validators"
+    required_proof: "tests, lint, typecheck, or scoped validator"
+
+  research:
+    use_when: "source lookup and synthesis"
+    required_proof: "citations or source references"
+
+  verifier:
+    use_when: "review output or safety-sensitive closeout"
+    required_proof: "independent check"
+
+safety:
+  require_approval_for:
+    - public_output
+    - customer_visible_output
+    - commit
+    - push
+    - deploy
+    - destructive_operations
+    - credential_changes
+    - billing_changes
+    - recurring_automation
+
+  never_publish:
+    - api_keys
+    - tokens
+    - private_hosts
+    - real_chat_ids
+    - customer_private_data
+    - raw_logs
+    - raw_transcripts
