@@ -1,0 +1,45 @@
+topics:
+  ops:
+    purpose: operations and fleet coordination
+    owner: orchestrator
+    allowed_work:
+      - status triage
+      - worker assignment
+      - incident coordination
+    forbidden_work:
+      - customer-private detail without scoped approval
+      - public announcements
+
+  engineering:
+    purpose: code and repo work
+    owner: engineering-lead
+    allowed_work:
+      - implementation plans
+      - validator reports
+      - PR coordination
+    forbidden_work:
+      - billing changes
+      - customer-visible messaging
+
+  approvals:
+    purpose: explicit approvals for high-risk actions
+    owner: human-operator
+    allowed_work:
+      - approve commit
+      - approve push
+      - approve deploy
+      - approve public output
+      - approve destructive operation
+
+  reports:
+    purpose: sanitized status reports
+    owner: orchestrator
+    allowed_work:
+      - summaries
+      - closeout reports
+      - verification cards
+
+defaults:
+  require_topic_receipt_on_move: true
+  require_closeout_proof: true
+  use_logical_names_only_in_public_docs: true

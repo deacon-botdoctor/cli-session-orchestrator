@@ -1,0 +1,15 @@
+id: sess_YYYYMMDD_HHMMSS_topic
+task: ""
+topic: engineering
+owner: orchestrator
+status: triaged
+created_at: "2026-07-06T00:00:00Z"
+updated_at: "2026-07-06T00:00:00Z"
+target: ""
+risk: medium
+worker: ""
+resume: ""
+proof: []
+handoff: ""
+public_safe: true
+notes: []
